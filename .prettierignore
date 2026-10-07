@@ -1,0 +1,8 @@
+dist/
+node_modules/
+coverage/
+public/assets/
+.agents/
+.codex/
+skills-lock.json
+package-lock.json

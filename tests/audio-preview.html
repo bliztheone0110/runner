@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="UTF-8" />
+  <title>Проверка звуков Momentum</title>
+  <style>
+    body {
+      margin: 40px auto;
+      padding: 20px;
+      max-width: 760px;
+      font: 16px system-ui;
+      background: #101d25;
+      color: #eef2ea;
+    }
+    button {
+      margin: 6px;
+      padding: 12px 20px;
+      cursor: pointer;
+      background: #b9f87c;
+      border: 0;
+      border-radius: 4px;
+    }
+    pre {
+      white-space: pre-wrap;
+      padding: 20px;
+      background: #20323a;
+    }
+  </style>
+  <h1>Проверка игровых звуков</h1>
+  <p>
+    Тестовая страница использует настоящий AudioSystem и те же MP3, что и игра. Захват курсора не
+    требуется.
+  </p>
+  <button data-event="game.started">Начало игры</button>
+  <button data-event="player.jumped">Случайный прыжок</button>
+  <button data-event="rocket.fired">Выстрел</button>
+  <button data-event="rocket.exploded" data-x="0">Взрыв рядом</button>
+  <button data-event="rocket.exploded" data-x="10">Взрыв справа</button>
+  <button data-event="rocket.exploded" data-x="-10">Взрыв слева</button>
+  <button data-event="player.respawned">Возрождение</button>
+  <button data-event="player.falling">Падение</button>
+  <button data-event="timer.expired">Время вышло</button>
+  <button id="pause">Пауза</button>
+  <pre id="status">Загрузка MP3…</pre>
+  <script type="module">
+    import { AudioSystem } from '/src/audio/AudioSystem.ts';
+    import { BrowserAudioOutput } from '/src/audio/BrowserAudioOutput.ts';
+    import { GameEvents } from '/src/core/GameEvents.ts';
+    const status = document.querySelector('#status');
+    const events = new GameEvents();
+    let loaded = 0;
+    class ObservedOutput extends BrowserAudioOutput {
+      async load(clip, url, signal) {
+        await super.load(clip, url, signal);
+        loaded++;
+      }
+      play(clip, gain, position) {
+        super.play(clip, gain, position);
+        status.textContent += `\nВоспроизведение: ${clip}${position ? `, x=${position.x}` : ''}`;
+      }
+    }
+    const audio = new AudioSystem(events, new ObservedOutput(), Math.random, (message) => {
+      status.textContent += `\nОшибка: ${message}`;
+    });
+    await audio.ready;
+    status.textContent += `\nДекодировано ${loaded}/8 MP3, включая falling и timer_end.`;
+    audio.setListener({
+      position: { x: 0, y: 1.65, z: 0 },
+      forward: { x: 0, y: 0, z: -1 },
+      up: { x: 0, y: 1, z: 0 },
+    });
+    document.querySelectorAll('[data-event]').forEach((button) =>
+      button.addEventListener('click', async () => {
+        audio.setActive(true);
+        await audio.unlock();
+        events.emit(
+          button.dataset.event === 'rocket.exploded'
+            ? { type: 'rocket.exploded', position: { x: Number(button.dataset.x), y: 0, z: -1 } }
+            : { type: button.dataset.event },
+        );
+        audio.fixedUpdate();
+      }),
+    );
+    document.querySelector('#pause').addEventListener('click', () => {
+      audio.setActive(false);
+      status.textContent += '\nПауза: источники остановлены.';
+    });
+    window.addEventListener('pagehide', () => audio.dispose());
+  </script>
+</html>
