@@ -6,7 +6,7 @@ export interface LevelBox {
   size: Vec3;
   color: number;
   kind: 'floor' | 'wall' | 'obstacle' | 'ramp' | 'rampRoof' | 'lava' | 'marker' | 'checkpoint';
-  texture?: 'floorStone' | 'wallRock' | 'lava';
+  texture?: 'floorStone' | 'wallRock' | 'lava' | 'timberTexture';
   collidable?: boolean;
   yaw?: number;
   pitch?: number;

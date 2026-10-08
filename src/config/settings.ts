@@ -53,7 +53,7 @@ export const settings = {
     checkpointInterval: 3,
     checkpointOffset: 8,
     fallingHeight: -2,
-    deathHeight: -12,
+    deathHeight: -8,
     rebaseDistance: 1024,
   },
   ramps: {

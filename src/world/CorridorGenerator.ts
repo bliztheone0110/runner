@@ -183,6 +183,9 @@ export class CorridorGenerator {
       if (kind === 'wall' || kind === 'obstacle') {
         generatedBox.texture = 'wallRock';
       }
+      if (kind === 'obstacle') {
+        generatedBox.texture = 'timberTexture';
+      }
       if (kind === 'lava') {
         generatedBox.texture = 'lava';
         generatedBox.collidable = false;
@@ -323,7 +326,7 @@ export class CorridorGenerator {
         box(0, solid / 2, width, solid, floorY, 2, 'floor', floorColor);
         box(0, length - solid / 2, width, solid, floorY, 2, 'floor', floorColor);
         for (const s of [solid - 0.2, length - solid + 0.2]) {
-          box(0, s, width, 0.2, start.y + 0.009, 0.015, 'marker', 0xf0a047);
+          box(0, s, width, 0.2, start.y + 0.009, 0.015, 'marker', 0x500008);
         }
       } else {
         box(0, length / 2, width, length, floorY, 2, 'floor', floorColor);
@@ -367,11 +370,12 @@ export class CorridorGenerator {
       }
     }
     // Local floor markings do not bridge gaps or add physics colliders.
-    for (const s of [4, 8, 12, 36, 40, 44]) {
-      if (!turn && template !== 'elevation') {
-        box(0, s, width - 1, 0.05, start.y + 0.006, 0.01, 'marker', 0x536f75);
-      }
-    }
+    // temporaly disabled
+    // for (const s of [4, 8, 12, 36, 40, 44]) {
+    //   if (!turn && template !== 'elevation') {
+    //     box(0, s, width - 1, 0.05, start.y + 0.006, 0.01, 'marker', 0x536f75);
+    //   }
+    // }
     const spawnHeight =
       template === 'elevation'
         ? Math.min(rise, (settings.corridor.checkpointOffset / rampLength) * rise)

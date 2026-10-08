@@ -37,6 +37,7 @@ export class ChunkRenderer implements ChunkPresentation {
   private readonly floorVariantTexture: Texture;
   private readonly rockTexture: Texture;
   private readonly lavaTexture: Texture;
+  private readonly timberTexture: Texture;
   private floorCompositeTexture?: CanvasTexture;
   private readonly lineMaterial = new LineBasicMaterial({
     color: 0xf3efe2,
@@ -57,8 +58,9 @@ export class ChunkRenderer implements ChunkPresentation {
         )
       : new Texture();
     this.rockTexture = loader ? loader.load('/assets/textures/wall_rock.png') : new Texture();
+    this.timberTexture = loader ? loader.load('/assets/textures/wall_timber.png') : new Texture();
     this.lavaTexture = loader ? loader.load('/assets/textures/lava.jpg') : new Texture();
-    for (const texture of [this.floorTexture, this.rockTexture, this.lavaTexture]) {
+    for (const texture of [this.floorTexture, this.rockTexture, this.lavaTexture, this.timberTexture]) {
       texture.colorSpace = SRGBColorSpace;
       texture.wrapS = RepeatWrapping;
       texture.wrapT = RepeatWrapping;
@@ -92,6 +94,8 @@ export class ChunkRenderer implements ChunkPresentation {
           map = this.rockTexture;
         } else if (textureName === 'lava') {
           map = this.lavaTexture;
+        } else if (textureName === 'timberTexture') {
+          map = this.timberTexture;
         }
         const materialOptions: MeshStandardMaterialParameters = {
           color: isTextured ? 0xffffff : box.color,
