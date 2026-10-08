@@ -1,12 +1,17 @@
 import type { Vec3 } from '../core/types';
-import type { BoxCollider } from '../physics/CollisionWorld';
+import type { WorldCollider } from '../physics/CollisionWorld';
 
 export interface LevelBox {
   center: Vec3;
   size: Vec3;
   color: number;
-  kind: 'floor' | 'wall' | 'obstacle' | 'marker' | 'checkpoint';
+  kind: 'floor' | 'wall' | 'obstacle' | 'ramp' | 'rampRoof' | 'marker' | 'checkpoint';
+  texture?: 'floorStone' | 'wallRock';
   collidable?: boolean;
+  yaw?: number;
+  pitch?: number;
+  colliderSize?: Vec3;
+  landingLength?: number;
 }
 export interface LevelDefinition {
   spawn: Vec3;
@@ -53,10 +58,39 @@ export const trainingLevel: LevelDefinition = {
   ],
 };
 
-export const levelColliders = (definition: LevelDefinition): BoxCollider[] =>
-  definition.boxes
-    .filter((box) => box.collidable !== false)
-    .map(({ center, size }) => ({
-      min: { x: center.x - size.x / 2, y: center.y - size.y / 2, z: center.z - size.z / 2 },
-      max: { x: center.x + size.x / 2, y: center.y + size.y / 2, z: center.z + size.z / 2 },
-    }));
+export const levelColliders = (definition: LevelDefinition): WorldCollider[] =>
+  definition.boxes.flatMap<WorldCollider>((box) => {
+    if (box.collidable === false) {
+      return [];
+    }
+    if (box.kind === 'ramp') {
+      const forward = { x: -Math.sin(box.yaw ?? 0), z: -Math.cos(box.yaw ?? 0) };
+      return [{
+        kind: 'ramp' as const,
+        start: {
+          x: box.center.x - forward.x * box.size.z / 2,
+          y: box.center.y - box.size.y / 2,
+          z: box.center.z - forward.z * box.size.z / 2,
+        },
+        yaw: box.yaw ?? 0,
+        width: box.size.x,
+        length: box.size.z,
+        rise: box.size.y,
+        landingLength: box.landingLength ?? 0,
+      }];
+    }
+    const colliderSize = box.colliderSize ?? box.size;
+    return [{
+      kind: 'box' as const,
+      min: {
+        x: box.center.x - colliderSize.x / 2,
+        y: box.center.y - colliderSize.y / 2,
+        z: box.center.z - colliderSize.z / 2,
+      },
+      max: {
+        x: box.center.x + colliderSize.x / 2,
+        y: box.center.y + colliderSize.y / 2,
+        z: box.center.z + colliderSize.z / 2,
+      },
+    }];
+  });

@@ -19,6 +19,8 @@ export const settings = {
   },
   camera: { eyeHeight: 1.65, fov: 85, sensitivity: 0.002, pitchLimit: Math.PI / 2 - 0.02 },
   weapons: {
+    eyeHeight: 1.1,
+    pitchDifference: 0.01,
     rocketSpeed: 40,
     rocketRadius: 0.08,
     rocketLifetime: 5,
@@ -31,7 +33,7 @@ export const settings = {
   },
   health: { max: 100, regeneration: 5, damageFlashDuration: 0.35 },
   world: { respawnHeight: -30 },
-  training: { size: 80, wallHeight: 32, gridSpacing: 4 },
+  training: { size: 160, wallHeight: 32, gridSpacing: 4 },
   checkpointTimer: {
     initial: 15,
     threshold: 10,
@@ -41,8 +43,11 @@ export const settings = {
   },
   corridor: {
     length: 48,
-    width: 12,
-    height: 12,
+    width: 16,
+    height: 24,
+    elevationChance: 0.2,
+    elevationFraction: 0.7,
+    elevationAngleDegrees: 45,
     ahead: 6,
     behind: 2,
     checkpointInterval: 3,
@@ -50,6 +55,9 @@ export const settings = {
     fallingHeight: -2,
     deathHeight: -12,
     rebaseDistance: 1024,
+  },
+  ramps: {
+    takeoffSpeedThreshold: 8,
   },
   audio: {
     volume: 0.5,

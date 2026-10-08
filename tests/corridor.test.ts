@@ -117,6 +117,45 @@ test('Training templates and difficulty dimensions stay in validated ranges with
   }
 });
 
+test('Elevations are seeded, keep route height connected, and occur on about one in five straight chunks', () => {
+  const route = chunks(20261008, 500);
+  assert.deepEqual(route, chunks(20261008, 500));
+  let eligible = 0;
+  let elevations = 0;
+  const rise =
+    settings.corridor.elevationFraction *
+    (settings.weapons.blastImpulse ** 2 / (2 * settings.movement.gravity));
+  for (let index = 0; index < route.length; index++) {
+    const chunk = route[index];
+    if (index >= 3 && chunk.template !== 'turn') {
+      eligible++;
+    }
+    if (index > 0) {
+      assert.deepEqual(chunk.legs[0].start, route[index - 1].exit);
+    }
+    if (chunk.template === 'elevation') {
+      elevations++;
+      close(chunk.exit.y - chunk.legs[0].start.y, rise);
+      const ramp = chunk.boxes.find((box) => box.kind === 'ramp');
+      assert.ok(ramp);
+      assert.equal(ramp.collidable, undefined);
+      close(ramp.size.z, rise);
+      assert.equal(chunk.boxes.filter((box) => box.kind === 'floor').length, 1);
+      const collisionWorld = new StaticCollisionWorld(levelColliders(chunk));
+      const rampCenter = pathPoint(chunk.legs[0].start, chunk.yaw, ramp.size.z / 2);
+      rampCenter.y = chunk.legs[0].start.y + rise / 2;
+      const rampHit = collisionWorld.traceSegment(
+        { ...rampCenter, y: rampCenter.y + 2 },
+        { ...rampCenter, y: rampCenter.y - 2 },
+      );
+      assert.ok(rampHit);
+      assert.ok(rampHit.normal.y > 0);
+    }
+  }
+  const frequency = elevations / eligible;
+  assert.ok(frequency > 0.15 && frequency < 0.25, `Elevation frequency was ${frequency}`);
+});
+
 test('Only real floor sections collide: gaps have no invisible floor, but ceiling and walls remain solid', () => {
   const gap = chunks(42, 3)[2];
   const world = new StaticCollisionWorld(levelColliders(gap));
@@ -134,7 +173,7 @@ test('Every sampled template is passable with actual movement and rockets where 
     if (!previous || chunk.obstacleSize > previous.obstacleSize)
       examples.set(chunk.template, chunk);
   }
-  assert.equal(examples.size, 6);
+  assert.equal(examples.size, 7);
   for (const [kind, chunk] of examples) {
     const world = new StaticCollisionWorld(levelColliders(chunk));
     const state = new PlayerState();
@@ -163,21 +202,28 @@ test('Every sampled template is passable with actual movement and rockets where 
     }
     const gap = kind.includes('gap');
     const rocket = kind.startsWith('rocket-');
-    const startDistance = gap ? (48 - chunk.obstacleSize) / 2 - (rocket ? 2 : 1) : 20;
+    const startDistance =
+      kind === 'elevation' ? 0.25 : gap ? (48 - chunk.obstacleSize) / 2 - (rocket ? 2 : 1) : 20;
     const point = pathPoint(chunk.legs[0].start, chunk.yaw, startDistance);
-    point.y = 0.00001;
+    point.y = chunk.legs[0].start.y + (kind === 'elevation' ? startDistance : 0) + 0.00001;
     movement.reset(point, chunk.yaw);
     const f = forward(chunk.yaw);
     state.velocity.x = f.x * 6;
     state.velocity.z = f.z * 6;
     if (rocket) state.pitch = -settings.camera.pitchLimit;
     let passed = false;
-    for (let i = 0; i < 600; i++) {
-      movement.step(dt, { ...emptyInput(), forward: 1, jumpPressed: i === 0 && kind !== 'run' });
+    for (let i = 0; i < 1600; i++) {
+      movement.step(dt, {
+        ...emptyInput(),
+        forward: 1,
+        jumpPressed: i === 0 && kind !== 'run' && kind !== 'elevation',
+      });
       input.snapshot.firePressed = i === 0 && rocket;
       weapons.fixedUpdate(dt);
       const distance = projectOnChunk(chunk, state.position);
-      if (distance !== undefined && distance >= 34 && state.position.y >= -0.01) {
+      const reachedEnd = kind === 'elevation' ? 46 : 34;
+      const reachedHeight = kind !== 'elevation' || state.position.y >= chunk.exit.y - 0.7;
+      if (distance !== undefined && distance >= reachedEnd && reachedHeight) {
         passed = true;
         break;
       }
@@ -358,7 +404,7 @@ test('Falling sound occurs once per fall, resets on landing, and death emits a s
   close(game.player.position.y, 0.00001);
 });
 
-test('Chunk meshes share a bounded set of resources and dispose them with the world', () => {
+test('Chunk meshes release per-chunk and shared geometry resources', () => {
   const scene = new Scene();
   const presentation = new ChunkRenderer(scene);
   const game = streamFixture(12, presentation);
@@ -370,10 +416,10 @@ test('Chunk meshes share a bounded set of resources and dispose them with the wo
   scene.traverse((object) => {
     if (object instanceof Mesh) geometries.add(object.geometry);
   });
-  assert.equal(geometries.size, 1);
+  assert.ok(geometries.size > 1);
   let disposed = 0;
   for (const geometry of geometries) geometry.addEventListener('dispose', () => disposed++);
   game.stream.dispose();
   assert.equal(scene.children.length, 0);
-  assert.equal(disposed, 1);
+  assert.equal(disposed, geometries.size);
 });

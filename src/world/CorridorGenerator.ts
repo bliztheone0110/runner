@@ -2,7 +2,8 @@ import { settings } from '../config/settings';
 import type { Vec3 } from '../core/types';
 import type { LevelBox, LevelDefinition } from './trainingLevel';
 
-export type CorridorTemplate = 'run' | 'blocks' | 'gap' | 'rocket-block' | 'rocket-gap' | 'turn';
+export type CorridorTemplate =
+  'run' | 'blocks' | 'gap' | 'rocket-block' | 'rocket-gap' | 'elevation' | 'turn';
 export interface GeneratorSnapshot {
   index: number;
   random: number;
@@ -135,6 +136,9 @@ export class CorridorGenerator {
         ? ['run', 'blocks', 'gap']
         : ['run', 'blocks', 'gap', 'rocket-block', 'rocket-gap'];
       template = choices[Math.floor(this.random() * choices.length)];
+      if (this.random() < settings.corridor.elevationChance) {
+        template = 'elevation';
+      }
     }
     let obstacleSize = 0;
     switch (template) {
@@ -154,8 +158,15 @@ export class CorridorGenerator {
     const length = settings.corridor.length;
     const width = settings.corridor.width;
     const half = width / 2;
-    const wallHeight = settings.corridor.height - settings.corridor.deathHeight;
-    const wallY = (settings.corridor.height + settings.corridor.deathHeight) / 2;
+    const rise =
+      settings.corridor.elevationFraction *
+      (settings.weapons.blastImpulse ** 2 / (2 * settings.movement.gravity));
+    const rampLength = rise / Math.tan((settings.corridor.elevationAngleDegrees * Math.PI) / 180);
+    const chunkRise = template === 'elevation' ? rise : 0;
+    const wallHeight = settings.corridor.height - settings.corridor.deathHeight + chunkRise;
+    const wallY = (settings.corridor.height + settings.corridor.deathHeight + chunkRise) / 2;
+    const floorY = start.y - 1;
+    const roofY = start.y + chunkRise + settings.corridor.height + 0.5;
     const boxes: LevelBox[] = [];
     const box = (
       u: number,
@@ -166,7 +177,13 @@ export class CorridorGenerator {
       h: number,
       kind: LevelBox['kind'],
       color: number,
-    ) => boxes.push(corridorBox(start, yaw, u, s, w, d, y, h, kind, color));
+    ) => {
+      const generatedBox = corridorBox(start, yaw, u, s, w, d, y, h, kind, color);
+      if (kind === 'wall' || kind === 'obstacle') {
+        generatedBox.texture = 'wallRock';
+      }
+      boxes.push(generatedBox);
+    };
     const floorColor = index % 3 === 0 ? 0x314c50 : 0x2a3b43;
     const legs: PathLeg[] = [{ start: { ...start }, yaw, length: turn ? length / 2 : length }];
     let exitYaw = yaw;
@@ -186,15 +203,15 @@ export class CorridorGenerator {
         [(direction * middle) / 2, middle, middle, width],
         [0, middle, width, width],
       ]) {
-        box(u, s, w, d, -1, 2, 'floor', floorColor);
-        box(u, s, w, d, settings.corridor.height + 0.5, 1, 'wall', 0x27373e);
+        box(u, s, w, d, floorY, 2, 'floor', floorColor);
+        box(u, s, w, d, roofY, 1, 'wall', 0x27373e);
       }
       box(
         -direction * (half + 0.5),
         (middle + half) / 2,
         1,
         middle + half,
-        wallY,
+        start.y + wallY,
         wallHeight,
         'wall',
         0x40565c,
@@ -204,7 +221,7 @@ export class CorridorGenerator {
         (middle - half) / 2,
         1,
         middle - half,
-        wallY,
+        start.y + wallY,
         wallHeight,
         'wall',
         0x40565c,
@@ -214,7 +231,7 @@ export class CorridorGenerator {
         middle + half + 0.5,
         middle + half,
         1,
-        wallY,
+        start.y + wallY,
         wallHeight,
         'wall',
         0x40565c,
@@ -224,63 +241,130 @@ export class CorridorGenerator {
         middle - half - 0.5,
         middle - half,
         1,
-        wallY,
+        start.y + wallY,
         wallHeight,
         'wall',
         0x40565c,
       );
     } else {
       exit = pathPoint(start, yaw, length);
-      if (template === 'gap' || template === 'rocket-gap') {
+      if (template === 'elevation') {
+        const rampCenter = pathPoint(start, yaw, rampLength / 2);
+        rampCenter.y = start.y + rise / 2;
+        boxes.push({
+          center: rampCenter,
+          size: { x: width, y: rise, z: rampLength },
+          kind: 'ramp',
+          color: floorColor,
+          texture: 'floorStone',
+          yaw,
+          landingLength: length - rampLength,
+        });
+        const upperFloorLength = length - rampLength;
+        const upperFloor = corridorBox(
+          start,
+          yaw,
+          0,
+          rampLength + upperFloorLength / 2,
+          width,
+          upperFloorLength,
+          start.y + rise - 1,
+          2,
+          'floor',
+          floorColor,
+        );
+        upperFloor.texture = 'floorStone';
+        upperFloor.collidable = false;
+        boxes.push(upperFloor);
+        const rampRoofCenter = pathPoint(start, yaw, rampLength / 2);
+        rampRoofCenter.y = start.y + settings.corridor.height + rise / 2 + 0.5;
+        boxes.push({
+          center: rampRoofCenter,
+          size: { x: width, y: 1, z: rampLength },
+          colliderSize: { x: width, y: rise + 1, z: rampLength },
+          kind: 'rampRoof',
+          color: 0x27373e,
+          texture: 'wallRock',
+          yaw,
+          pitch: (settings.corridor.elevationAngleDegrees * Math.PI) / 180,
+        });
+        const upperRoof = corridorBox(
+          start,
+          yaw,
+          0,
+          rampLength + upperFloorLength / 2,
+          width,
+          upperFloorLength,
+          start.y + rise + settings.corridor.height + 0.5,
+          1,
+          'wall',
+          0x27373e,
+        );
+        upperRoof.texture = 'wallRock';
+        boxes.push(upperRoof);
+        exit.y += rise;
+      } else if (template === 'gap' || template === 'rocket-gap') {
         const solid = (length - obstacleSize) / 2;
-        box(0, solid / 2, width, solid, -1, 2, 'floor', floorColor);
-        box(0, length - solid / 2, width, solid, -1, 2, 'floor', floorColor);
+        box(0, solid / 2, width, solid, floorY, 2, 'floor', floorColor);
+        box(0, length - solid / 2, width, solid, floorY, 2, 'floor', floorColor);
         for (const s of [solid - 0.2, length - solid + 0.2]) {
-          box(0, s, width, 0.2, 0.009, 0.015, 'marker', 0xf0a047);
+          box(0, s, width, 0.2, start.y + 0.009, 0.015, 'marker', 0xf0a047);
         }
       } else {
-        box(0, length / 2, width, length, -1, 2, 'floor', floorColor);
+        box(0, length / 2, width, length, floorY, 2, 'floor', floorColor);
         if (template === 'blocks' || template === 'rocket-block') {
           box(
             0,
             length / 2,
             width,
             2.5,
-            obstacleSize / 2,
+            start.y + obstacleSize / 2,
             obstacleSize,
             'obstacle',
             template === 'rocket-block' ? 0xe59648 : 0x3bb9a6,
           );
         }
       }
-      box(0, length / 2, width, length, settings.corridor.height + 0.5, 1, 'wall', 0x27373e);
+      if (template !== 'elevation') {
+        box(0, length / 2, width, length, roofY, 1, 'wall', 0x27373e);
+      }
       for (const side of [-1, 1]) {
-        box(side * (half + 0.5), length / 2, 1, length, wallY, wallHeight, 'wall', 0x40565c);
+        box(
+          side * (half + 0.5),
+          length / 2,
+          1,
+          length,
+          start.y + wallY,
+          wallHeight,
+          'wall',
+          0x40565c,
+        );
       }
     }
     // Local floor markings do not bridge gaps or add physics colliders.
     for (const s of [4, 8, 12, 36, 40, 44]) {
-      if (!turn) {
-        box(0, s, width - 1, 0.05, 0.006, 0.01, 'marker', 0x536f75);
+      if (!turn && template !== 'elevation') {
+        box(0, s, width - 1, 0.05, start.y + 0.006, 0.01, 'marker', 0x536f75);
       }
     }
-    if (
-      index > 0 &&
-      index % settings.corridor.checkpointInterval === 0
-    ) {
+    const spawnHeight =
+      template === 'elevation'
+        ? Math.min(rise, (settings.corridor.checkpointOffset / rampLength) * rise)
+        : 0;
+    if (index > 0 && index % settings.corridor.checkpointInterval === 0) {
       box(
         0,
         settings.corridor.checkpointOffset,
         width - 0.5,
         0.16,
-        settings.corridor.height / 2,
+        start.y + spawnHeight + settings.corridor.height / 2,
         settings.corridor.height,
         'checkpoint',
         0xb9f87c,
       );
     }
     const spawn = pathPoint(start, yaw, settings.corridor.checkpointOffset);
-    spawn.y = 0.00001;
+    spawn.y = start.y + spawnHeight + 0.00001;
     this.cursor.index++;
     this.cursor.start = { ...exit };
     this.cursor.yaw = exitYaw;

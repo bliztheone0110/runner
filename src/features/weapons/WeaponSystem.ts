@@ -93,7 +93,7 @@ export class WeaponSystem implements GameSystem {
     this.cooldown = settings.weapons.cooldown;
     this.events.emit({ type: 'rocket.fired' });
     const yaw = this.player.yaw;
-    const pitch = this.player.pitch;
+    const pitch = this.player.pitch + settings.weapons.pitchDifference;
     const direction = {
       x: -Math.sin(yaw) * Math.cos(pitch),
       y: Math.sin(pitch),
@@ -101,7 +101,7 @@ export class WeaponSystem implements GameSystem {
     };
     const eye = {
       x: this.player.position.x,
-      y: this.player.position.y + settings.camera.eyeHeight,
+      y: this.player.position.y + settings.weapons.eyeHeight,
       z: this.player.position.z,
     };
     const position = {

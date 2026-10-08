@@ -195,8 +195,8 @@ export class WorldStreamSystem implements GameWorld {
       -0.5,
       settings.corridor.width + 2,
       1,
-      0,
-      24,
+      start.y + settings.corridor.height / 2,
+      settings.corridor.height,
       'wall',
       0x6c8078,
     );

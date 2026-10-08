@@ -1,7 +1,7 @@
 import { settings, type MovementConfig } from '../../config/settings';
 import { approach, clamp, copy, type Vec3 } from '../../core/types';
 import type { MovementInput } from '../../input/InputState';
-import type { CollisionWorld } from '../../physics/CollisionWorld';
+import type { CollisionWorld, RampContact } from '../../physics/CollisionWorld';
 import { type PlayerState } from './PlayerState';
 import { silentEvents, type EventSink } from '../../core/GameEvents';
 
@@ -9,6 +9,7 @@ export class MovementController {
   private bufferedJump = 0;
   private externalImpulse = false;
   private landingBrakeRemaining = 0;
+  private rampContact: RampContact | undefined;
   constructor(
     readonly state: PlayerState,
     private readonly collisions: CollisionWorld,
@@ -31,6 +32,7 @@ export class MovementController {
     this.bufferedJump = 0;
     this.externalImpulse = false;
     this.landingBrakeRemaining = 0;
+    this.rampContact = undefined;
   }
 
   applyImpulse(impulse: Vec3): void {
@@ -41,6 +43,7 @@ export class MovementController {
     if (this.state.velocity.y > 0) {
       this.state.grounded = false;
       this.landingBrakeRemaining = 0;
+      this.rampContact = undefined;
     }
     this.state.peakSpeed = Math.max(this.state.peakSpeed, this.state.speed);
   }
@@ -76,6 +79,8 @@ export class MovementController {
     let speed = state.speed;
     const wasGrounded = state.grounded;
 
+    const onRamp = state.grounded && this.rampContact && this.rampContact.slope > 0;
+
     if (state.grounded) {
       // A missed landing jump sheds all excess momentum in a fixed duration,
       // regardless of how much speed the previous bunnyhop chain accumulated.
@@ -83,7 +88,31 @@ export class MovementController {
         this.landingBrakeRemaining > 0
           ? Math.max(0, speed - config.baseSpeed) / this.landingBrakeRemaining
           : 0;
-      if (magnitude > 0) {
+      if (onRamp && magnitude > 0) {
+        const target =
+          this.landingBrakeRemaining > 0
+            ? config.baseSpeed
+            : config.baseSpeed + config.groundTurnBonus * turn;
+        if (this.externalImpulse) {
+          const currentAngle = Math.atan2(state.velocity.x, state.velocity.z);
+          const targetAngle = Math.atan2(wishX, wishZ);
+          const delta = Math.atan2(
+            Math.sin(targetAngle - currentAngle),
+            Math.cos(targetAngle - currentAngle),
+          );
+          const angle =
+            currentAngle +
+            clamp(delta, -config.airSteeringRate * dt, config.airSteeringRate * dt);
+          speed = Math.max(speed, target);
+          state.velocity.x = Math.sin(angle) * speed;
+          state.velocity.z = Math.cos(angle) * speed;
+        } else {
+          const targetX = wishX * target;
+          const targetZ = wishZ * target;
+          state.velocity.x = approach(state.velocity.x, targetX, config.groundAcceleration * dt);
+          state.velocity.z = approach(state.velocity.z, targetZ, config.groundAcceleration * dt);
+        }
+      } else if (magnitude > 0) {
         const target =
           this.landingBrakeRemaining > 0
             ? config.baseSpeed
@@ -112,7 +141,7 @@ export class MovementController {
           state.velocity.x = wishX * speed;
           state.velocity.z = wishZ * speed;
         }
-      } else {
+      } else if (!onRamp) {
         const nextSpeed = approach(speed, 0, Math.max(config.braking, landingBraking) * dt);
         if (speed > 0) {
           state.velocity.x *= nextSpeed / speed;
@@ -139,6 +168,17 @@ export class MovementController {
       state.velocity.z = Math.cos(angle) * speed;
     }
 
+    if (onRamp && this.rampContact) {
+      const horizontalNormal = Math.hypot(
+        this.rampContact.normal.x,
+        this.rampContact.normal.z,
+      );
+      const horizontalGravity =
+        config.gravity * this.rampContact.normal.y * horizontalNormal;
+      state.velocity.x += this.rampContact.downhill.x * horizontalGravity * dt;
+      state.velocity.z += this.rampContact.downhill.z * horizontalGravity * dt;
+    }
+
     state.velocity.y -= config.gravity * dt;
     const result = this.collisions.move(
       {
@@ -150,6 +190,18 @@ export class MovementController {
       { x: state.velocity.x * dt, y: state.velocity.y * dt, z: state.velocity.z * dt },
     );
     state.grounded = result.grounded;
+    const rampTakeoff = result.rampTakeoff;
+    if (rampTakeoff && rampTakeoff.uphillSpeed >= settings.ramps.takeoffSpeedThreshold) {
+      const horizontalSpeed = rampTakeoff.speed * Math.cos(rampTakeoff.angle);
+      state.velocity.x = rampTakeoff.direction.x * horizontalSpeed;
+      state.velocity.z = rampTakeoff.direction.z * horizontalSpeed;
+      state.velocity.y = rampTakeoff.speed * Math.sin(rampTakeoff.angle);
+      state.grounded = false;
+      this.rampContact = undefined;
+      this.landingBrakeRemaining = 0;
+    } else {
+      this.rampContact = result.ramp;
+    }
     // A buffered landing jump occurs before any ground braking on the next tick.
     if (state.grounded && this.bufferedJump > 0) {
       this.jump();
@@ -162,6 +214,7 @@ export class MovementController {
   }
 
   private jump(): void {
+    this.rampContact = undefined;
     this.state.velocity.y = Math.max(this.state.velocity.y, this.config.jumpSpeed);
     this.state.grounded = false;
     this.landingBrakeRemaining = 0;
