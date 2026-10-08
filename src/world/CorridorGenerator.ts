@@ -167,6 +167,7 @@ export class CorridorGenerator {
     const wallY = (settings.corridor.height + settings.corridor.deathHeight + chunkRise) / 2;
     const floorY = start.y - 1;
     const roofY = start.y + chunkRise + settings.corridor.height + 0.5;
+    const lavaThickness = 0.1;
     const boxes: LevelBox[] = [];
     const box = (
       u: number,
@@ -181,6 +182,10 @@ export class CorridorGenerator {
       const generatedBox = corridorBox(start, yaw, u, s, w, d, y, h, kind, color);
       if (kind === 'wall' || kind === 'obstacle') {
         generatedBox.texture = 'wallRock';
+      }
+      if (kind === 'lava') {
+        generatedBox.texture = 'lava';
+        generatedBox.collidable = false;
       }
       boxes.push(generatedBox);
     };
@@ -204,6 +209,16 @@ export class CorridorGenerator {
         [0, middle, width, width],
       ]) {
         box(u, s, w, d, floorY, 2, 'floor', floorColor);
+        box(
+          u,
+          s,
+          w,
+          d,
+          start.y + settings.corridor.deathHeight - lavaThickness / 2,
+          lavaThickness,
+          'lava',
+          0xffffff,
+        );
         box(u, s, w, d, roofY, 1, 'wall', 0x27373e);
       }
       box(
@@ -325,6 +340,16 @@ export class CorridorGenerator {
           );
         }
       }
+      box(
+        0,
+        length / 2,
+        width,
+        length,
+        start.y + settings.corridor.deathHeight - lavaThickness / 2,
+        lavaThickness,
+        'lava',
+        0xffffff,
+      );
       if (template !== 'elevation') {
         box(0, length / 2, width, length, roofY, 1, 'wall', 0x27373e);
       }

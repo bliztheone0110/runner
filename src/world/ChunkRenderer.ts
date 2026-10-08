@@ -36,6 +36,7 @@ export class ChunkRenderer implements ChunkPresentation {
   private readonly floorTexture: Texture;
   private readonly floorVariantTexture: Texture;
   private readonly rockTexture: Texture;
+  private readonly lavaTexture: Texture;
   private floorCompositeTexture?: CanvasTexture;
   private readonly lineMaterial = new LineBasicMaterial({
     color: 0xf3efe2,
@@ -56,7 +57,8 @@ export class ChunkRenderer implements ChunkPresentation {
         )
       : new Texture();
     this.rockTexture = loader ? loader.load('/assets/textures/wall_rock.png') : new Texture();
-    for (const texture of [this.floorTexture, this.rockTexture]) {
+    this.lavaTexture = loader ? loader.load('/assets/textures/lava.jpg') : new Texture();
+    for (const texture of [this.floorTexture, this.rockTexture, this.lavaTexture]) {
       texture.colorSpace = SRGBColorSpace;
       texture.wrapS = RepeatWrapping;
       texture.wrapT = RepeatWrapping;
@@ -88,6 +90,8 @@ export class ChunkRenderer implements ChunkPresentation {
           map = this.floorCompositeTexture ?? this.floorTexture;
         } else if (textureName === 'wallRock') {
           map = this.rockTexture;
+        } else if (textureName === 'lava') {
+          map = this.lavaTexture;
         }
         const materialOptions: MeshStandardMaterialParameters = {
           color: isTextured ? 0xffffff : box.color,
@@ -96,6 +100,10 @@ export class ChunkRenderer implements ChunkPresentation {
           opacity: isCheckpoint ? 0.05 : 1,
           depthWrite: !isCheckpoint,
         };
+        if (textureName === 'lava') {
+          materialOptions.emissive = 0xff4b05;
+          materialOptions.emissiveIntensity = 0.65;
+        }
         if (map) {
           materialOptions.map = map;
         }
@@ -108,7 +116,7 @@ export class ChunkRenderer implements ChunkPresentation {
           this.floorMaterials.add(material);
         }
       }
-      const tileSize = textureName === 'floorStone' ? 8 : 2;
+      const tileSize = textureName === 'floorStone' || textureName === 'lava' ? 8 : 2;
       let geometry: BufferGeometry = this.geometry;
       if (box.kind === 'ramp') {
         geometry = this.createRampGeometry(box.size, tileSize);
@@ -270,6 +278,7 @@ export class ChunkRenderer implements ChunkPresentation {
     this.floorTexture.dispose();
     this.floorVariantTexture.dispose();
     this.rockTexture.dispose();
+    this.lavaTexture.dispose();
     this.floorCompositeTexture?.dispose();
     for (const material of this.materials.values()) {
       material.dispose();
