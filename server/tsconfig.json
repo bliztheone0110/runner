@@ -5,7 +5,8 @@
     "types": ["node"],
     "rootDir": "..",
     "outDir": "dist",
-    "noEmit": false
+    "noEmit": false,
+    "allowImportingTsExtensions": false
   },
   "include": ["src/**/*.ts"]
 }
