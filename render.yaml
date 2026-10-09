@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: momentum-leaderboard-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: 'true'
+      - key: CORS_ORIGIN
+        sync: false

@@ -5,6 +5,8 @@ import { settings } from '../config/settings';
 import type { GameMode, WorldStats } from '../world/GameWorld';
 import type { CheckpointTimerState } from '../features/timer/CheckpointTimer';
 import { requireElement } from './dom';
+import { LeaderboardClient, type LeaderboardEntry } from './LeaderboardClient';
+import { loadUsername, saveUsername } from './leaderboardStorage';
 
 export interface AudioControls {
   setVolume(volume: number): void;
@@ -39,6 +41,13 @@ export class Hud implements GameSystem {
   private readonly endOverlay: HTMLElement;
   private readonly completedCheckpoints: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
+  private readonly usernameInput: HTMLInputElement;
+  private readonly leaderboardPanel: HTMLElement;
+  private readonly leaderboardList: HTMLOListElement;
+  private readonly leaderboardStatus: HTMLElement;
+  private readonly resultStatus: HTMLElement;
+  private readonly resultLeaderboard: HTMLElement;
+  private readonly resultLeaderboardList: HTMLOListElement;
   private ended = false;
 
   constructor(
@@ -50,6 +59,7 @@ export class Hud implements GameSystem {
     private readonly worldStats?: WorldStats,
     private readonly checkpointTimer?: CheckpointTimerState,
     onRestart: () => void = () => {},
+    private readonly leaderboardClient: LeaderboardClient = new LeaderboardClient(),
   ) {
     this.root.className = 'hud';
     this.root.innerHTML = `
@@ -151,7 +161,19 @@ export class Hud implements GameSystem {
             </label>
           </div>
 
-          <button type="button">Начать <span>↗</span></button>
+          <div class="player-name-control">
+            <label for="player-name">Имя игрока</label>
+            <input id="player-name" type="text" maxlength="24" autocomplete="nickname">
+          </div>
+          <button type="button" data-start>Начать <span>↗</span></button>
+          <button class="leaderboard-toggle" type="button" data-leaderboard-toggle>
+            Таблица лидеров
+          </button>
+          <section class="leaderboard-panel" data-leaderboard-panel hidden>
+            <h2>Лучшие результаты</h2>
+            <p data-leaderboard-status role="status"></p>
+            <ol data-leaderboard-list></ol>
+          </section>
           <p class="pointer-note">Мышь управляет камерой · Escape освобождает курсор</p>
           <p class="error-message" role="status"></p>
         </section>
@@ -167,7 +189,11 @@ export class Hud implements GameSystem {
     this.meter = find('[data-meter]');
     this.overlay = find('.overlay');
     this.message = find('.error-message');
-    this.button = find('button');
+    this.button = find('[data-start]');
+    this.usernameInput = find('#player-name');
+    this.leaderboardPanel = find('[data-leaderboard-panel]');
+    this.leaderboardList = find('[data-leaderboard-list]');
+    this.leaderboardStatus = find('[data-leaderboard-status]');
     this.healthValue = find('[data-health]');
     this.healthFill = find('[data-health-fill]');
     this.healthPanel = find('.health-panel');
@@ -210,19 +236,57 @@ export class Hud implements GameSystem {
       >
         <h2 id="run-end-title">Время вышло!</h2>
         <p>Пройдено чекпоинтов: <strong data-completed-checkpoints>0</strong></p>
+        <p class="record-status" data-result-status role="status"></p>
+        <section class="result-leaderboard" data-result-leaderboard hidden>
+          <h3>Таблица лидеров</h3>
+          <ol data-result-leaderboard-list></ol>
+        </section>
         <button type="button">Начать сначала</button>
       </section>
     `;
     this.root.append(this.endOverlay);
     this.completedCheckpoints = requireElement(this.endOverlay, '[data-completed-checkpoints]');
+    this.resultStatus = requireElement(this.endOverlay, '[data-result-status]');
+    this.resultLeaderboard = requireElement(this.endOverlay, '[data-result-leaderboard]');
+    this.resultLeaderboardList = requireElement(this.endOverlay, '[data-result-leaderboard-list]');
     this.restartButton = requireElement(this.endOverlay, 'button');
     this.restartButton.addEventListener('click', onRestart, { signal: this.abort.signal });
     this.modeSelect.addEventListener('change', () => this.updateStartButton(), {
       signal: this.abort.signal,
     });
-    this.button.addEventListener('click', () => onStart(this.modeSelect.value as GameMode), {
-      signal: this.abort.signal,
-    });
+    this.usernameInput.value = loadUsername(getLocalStorage());
+    this.usernameInput.addEventListener(
+      'input',
+      () => {
+        const normalized = saveUsername(getLocalStorage(), this.usernameInput.value);
+        if (normalized !== this.usernameInput.value) {
+          this.usernameInput.value = normalized;
+        }
+      },
+      { signal: this.abort.signal },
+    );
+    this.button.addEventListener(
+      'click',
+      () => {
+        if (this.modeSelect.value === 'corridor' && !this.usernameInput.value.trim()) {
+          this.message.textContent = 'Введите имя, чтобы сохранить результат.';
+          this.usernameInput.focus();
+          return;
+        }
+        onStart(this.modeSelect.value as GameMode);
+      },
+      { signal: this.abort.signal },
+    );
+    find<HTMLButtonElement>('[data-leaderboard-toggle]').addEventListener(
+      'click',
+      () => {
+        this.leaderboardPanel.hidden = !this.leaderboardPanel.hidden;
+        if (!this.leaderboardPanel.hidden) {
+          void this.refreshLeaderboard(this.leaderboardStatus, this.leaderboardList);
+        }
+      },
+      { signal: this.abort.signal },
+    );
     const volume = find<HTMLInputElement>('#audio-volume');
     const mute = find<HTMLInputElement>('[data-mute]');
     const volumeLabel = find('[data-volume]');
@@ -256,6 +320,9 @@ export class Hud implements GameSystem {
     this.completedCheckpoints.textContent = String(completed);
     this.endOverlay.hidden = false;
     this.restartButton.focus();
+    this.resultStatus.textContent = 'Сохраняем результат…';
+    this.resultLeaderboard.hidden = true;
+    void this.submitResult(this.usernameInput.value, completed);
   }
   clearTimerEnd(): void {
     this.ended = false;
@@ -282,6 +349,56 @@ export class Hud implements GameSystem {
       label = this.modeSelect.value === 'training' ? 'Начать тренировку' : 'Начать коридор';
     }
     this.button.innerHTML = `${label} <span>↗</span>`;
+  }
+  private async submitResult(username: string, checkpoints: number): Promise<void> {
+    try {
+      const entry = await this.leaderboardClient.submitRecord(username, checkpoints);
+      this.resultStatus.textContent =
+        entry.checkpoints > checkpoints
+          ? `Ваш лучший результат: ${entry.checkpoints} чекпоинтов.`
+          : 'Результат сохранён.';
+    } catch (error) {
+      this.resultStatus.textContent =
+        error instanceof Error
+          ? `Не удалось сохранить: ${error.message}`
+          : 'Не удалось сохранить результат.';
+    }
+    await this.refreshLeaderboard(this.resultStatus, this.resultLeaderboardList, true);
+  }
+  private async refreshLeaderboard(
+    status: HTMLElement,
+    list: HTMLOListElement,
+    preserveStatus = false,
+  ): Promise<void> {
+    if (!preserveStatus) {
+      status.textContent = 'Загружаем…';
+    }
+    try {
+      const entries = await this.leaderboardClient.getLeaderboard();
+      this.renderLeaderboard(entries, list);
+      if (!preserveStatus) {
+        status.textContent = entries.length ? '' : 'Пока нет результатов.';
+      } else {
+        this.resultLeaderboard.hidden = false;
+      }
+    } catch (error) {
+      if (!preserveStatus) {
+        status.textContent =
+          error instanceof Error ? error.message : 'Не удалось загрузить рейтинг.';
+      }
+    }
+  }
+  private renderLeaderboard(entries: LeaderboardEntry[], list: HTMLOListElement): void {
+    list.replaceChildren();
+    for (const entry of entries) {
+      const item = document.createElement('li');
+      const name = document.createElement('span');
+      const score = document.createElement('strong');
+      name.textContent = entry.username;
+      score.textContent = String(entry.checkpoints);
+      item.append(name, score);
+      list.append(item);
+    }
   }
   showError(message: string): void {
     this.overlay.hidden = false;
@@ -325,5 +442,20 @@ export class Hud implements GameSystem {
   dispose(): void {
     this.abort.abort();
     this.root.remove();
+  }
+}
+
+function getLocalStorage(): Storage {
+  try {
+    return window.localStorage;
+  } catch {
+    return {
+      getItem: () => null,
+      setItem: () => {},
+      length: 0,
+      clear: () => {},
+      key: () => null,
+      removeItem: () => {},
+    };
   }
 }

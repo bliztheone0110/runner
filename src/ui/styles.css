@@ -538,6 +538,115 @@ h1 em {
   outline-offset: 4px;
 }
 
+.player-name-control {
+  margin: 18px 0 12px;
+  color: #afbfbe;
+  font-size: 11px;
+}
+
+.player-name-control label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.player-name-control input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #839a9c70;
+  border-radius: 3px;
+  background: #172831;
+  color: #eef2ea;
+  font: inherit;
+}
+
+.player-name-control input:focus-visible {
+  outline: 2px solid #b9f87c;
+  outline-offset: 2px;
+}
+
+.intro .leaderboard-toggle {
+  justify-content: center;
+  margin-top: 8px;
+  border: 1px solid #839a9c70;
+  background: transparent;
+  color: #d4ded6;
+  padding: 12px 16px;
+}
+
+.intro .leaderboard-toggle:hover {
+  background: #243b42;
+}
+
+.leaderboard-panel {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #839a9c40;
+  border-radius: 4px;
+  background: #101f29;
+  color: #d4ded6;
+}
+
+.leaderboard-panel h2,
+.result-leaderboard h3 {
+  margin: 0 0 10px;
+  color: #b9f87c;
+  font-size: 14px;
+}
+
+.leaderboard-panel p {
+  margin: 0 0 8px;
+  color: #afbfbe;
+  font-size: 10px;
+}
+
+.leaderboard-panel ol,
+.result-leaderboard ol {
+  margin: 0;
+  padding-left: 24px;
+  color: #afbfbe;
+  font-size: 11px;
+}
+
+.leaderboard-panel li,
+.result-leaderboard li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+
+.leaderboard-panel li span,
+.result-leaderboard li span {
+  overflow: hidden;
+  color: #eef2ea;
+  text-overflow: ellipsis;
+}
+
+.leaderboard-panel li strong,
+.result-leaderboard li strong {
+  color: #b9f87c;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-status {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.result-leaderboard {
+  margin: 0 0 22px;
+  text-align: left;
+}
+
+.result-leaderboard h3 {
+  text-align: center;
+}
+
+.intro .leaderboard-toggle:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
 /* State and structural overrides follow the base styles. */
 .low-health .health-track div {
   background: #ff8365;

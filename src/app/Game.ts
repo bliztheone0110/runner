@@ -24,6 +24,7 @@ import { FallingSystem } from '../features/player/FallingSystem';
 import { WorldSession } from './WorldSession';
 import { TrainingWorld } from '../world/TrainingWorld';
 import { CheckpointTimer } from '../features/timer/CheckpointTimer';
+import { LeaderboardClient } from '../ui/LeaderboardClient';
 
 export class Game {
   private readonly loop: GameLoop;
@@ -95,6 +96,7 @@ export class Game {
         void audio.unlock();
         void input.lock();
       },
+      new LeaderboardClient(import.meta.env.VITE_API_BASE_URL ?? ''),
     );
     const input = new BrowserInput(
       graphics.renderer.domElement,

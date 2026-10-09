@@ -1,5 +1,8 @@
 node_modules/
 dist/
+.env
+.env.*
+!.env.example
 .agents/
 AGENTS.MD
 skills-lock.json
